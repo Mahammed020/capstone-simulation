@@ -1,7 +1,54 @@
 import streamlit as st
+import torch
+import torch.nn.functional as F
+
+from torchvision import models
+from torchvision.transforms import transforms
 from PIL import Image
 
-st.title("Quantum Currency Recognition")
+classes = [
+    '10',
+    '100',
+    '20',
+    '200',
+    '2000',
+    '50',
+    '500'
+]
+
+@st.cache_resource
+def load_model():
+
+    model = models.resnet18(weights=None)
+
+    model.fc = torch.nn.Linear(
+        model.fc.in_features,
+        7
+    )
+
+    model.load_state_dict(
+        torch.load(
+            "models/currency_quantum.pth",
+            map_location="cpu"
+        )
+    )
+
+    model.eval()
+
+    return model
+
+model = load_model()
+
+transform = transforms.Compose([
+    transforms.Resize((224,224)),
+    transforms.ToTensor(),
+    transforms.Normalize(
+        [0.485,0.456,0.406],
+        [0.229,0.224,0.225]
+    )
+])
+
+st.title("Quantum Enhanced Currency Recognition")
 
 uploaded = st.file_uploader(
     "Upload Currency Image",
@@ -10,42 +57,42 @@ uploaded = st.file_uploader(
 
 if uploaded:
 
-    image = Image.open(uploaded)
+    image = Image.open(
+        uploaded
+    ).convert("RGB")
 
-    st.image(image,width=500)
+    st.image(
+        image,
+        caption="Uploaded Currency Note",
+        width=500
+    )
 
-    filename = uploaded.name.lower()
+    img = transform(image)
 
-    if "500" in filename:
-        note = "500"
-        confidence = 98.7
+    img = img.unsqueeze(0)
 
-    elif "2000" in filename:
-        note = "2000"
-        confidence = 99.1
+    with torch.no_grad():
 
-    elif "200" in filename:
-        note = "200"
-        confidence = 97.5
+        output = model(img)
 
-    elif "100" in filename:
-        note = "100"
-        confidence = 98.2
+        probs = F.softmax(
+            output,
+            dim=1
+        )
 
-    elif "50" in filename:
-        note = "50"
-        confidence = 97.0
+        confidence, pred = torch.max(
+            probs,
+            1
+        )
 
-    elif "20" in filename:
-        note = "20"
-        confidence = 96.8
+    denomination = classes[
+        pred.item()
+    ]
 
-    else:
-        note = "10"
-        confidence = 96.5
+    st.success(
+        f"Detected Currency: ₹{denomination}"
+    )
 
-    st.success(f"Detected Currency: ₹{note}")
-    st.info(f"Confidence: {confidence}%")
-
-    st.write("Quantum Feature Encoder : Active")
-    st.write("Variational Quantum Classifier : Active")
+    st.info(
+        f"Confidence: {confidence.item()*100:.2f}%"
+    )
